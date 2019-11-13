@@ -1,0 +1,6 @@
+{
+    "comPort": "COM144",
+    "pin": null,
+    "smsMode": true,
+    "extendedErrorReports": true
+}

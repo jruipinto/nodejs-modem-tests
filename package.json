@@ -11,5 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "serialport": "^8.0.5"
+  },
+  "devDependencies": {
+    "typescript": "^3.7.2"
   }
 }
