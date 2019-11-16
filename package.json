@@ -10,9 +10,11 @@
   "author": "J Rui Pinto",
   "license": "ISC",
   "dependencies": {
+    "@types/node": "^12.12.7",
     "serialport": "^8.0.5"
   },
   "devDependencies": {
+    "@types/serialport": "^7.0.4",
     "typescript": "^3.7.2"
   }
 }
