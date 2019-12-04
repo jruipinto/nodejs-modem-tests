@@ -2,7 +2,7 @@
   "name": "nodejs-modem-tests",
   "version": "1.0.0",
   "description": "app for testing modem communication by serial port",
-  "main": "index.js",
+  "main": "scr/index.js",
   "scripts": {
     "start": "node .",
     "test": "echo \"Error: no test specified\" && exit 1"
