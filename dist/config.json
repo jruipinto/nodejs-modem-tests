@@ -1,7 +1,0 @@
-{
-    "port": "COM5",
-    "baudRate": 230400,
-    "pin": null,
-    "smsMode": true,
-    "extendedErrorReports": true
-}
