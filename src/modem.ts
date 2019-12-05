@@ -4,9 +4,16 @@ import SerialPort from 'serialport';
 import { ModemTask } from './models/modem-task.model';
 const Readline = require('@serialport/parser-readline')
 
+const handleError = (err) => {
+    if (err) {
+        console.log(err.message);
+    }
+};
+
 export class Modem {
 
     private static taskStack: ModemTask[];
+    private static tasksTotal = 0;
 
     private static port: SerialPort;
     private static parser: any;
@@ -16,11 +23,7 @@ export class Modem {
     }
 
     constructor(private modemCfg: ModemConfig) {
-        Modem.port = new SerialPort(modemCfg.port, { baudRate: modemCfg.baudRate }, (err) => {
-            if (err) {
-                console.log(`Error on opening port`, err.message)
-            }
-        });
+        Modem.port = new SerialPort(modemCfg.port, { baudRate: modemCfg.baudRate }, handleError);
 
         Modem.port.on('error', (err) => {
             if (err) {
@@ -30,41 +33,60 @@ export class Modem {
         });
 
         Modem.parser = Modem.port.pipe(new Readline());
-        Modem.parser.on('data', (data) => {
+        Modem.parser.on('data', Modem.handleTasksAndNotifications);
 
-            console.log(`Modem says: ${data}`);
-        })
-
-        Modem.port.write(`at\r`);
-        Modem.port.write(`at+cmgf=1\r`);
-        Modem.port.write(`at+cnmi=1,1,0,1,0\r`);
-        Modem.port.write(`at+csmp=49,167,0,0\r`);
+        Modem.addTask({
+            id: Modem.tasksTotal + 1,
+            trigger: 'OK',
+            fn: () => Modem.port.write(`at+cmgf=1\r`, handleError)
+        });
+        Modem.addTask({
+            id: Modem.tasksTotal + 1,
+            trigger: 'OK',
+            fn: () => Modem.port.write(`at+cnmi=1,1,0,1,0\r`, handleError)
+        });
+        Modem.addTask({
+            id: Modem.tasksTotal + 1,
+            trigger: 'OK',
+            fn: () => Modem.port.write(`at+csmp=49,167,0,0\r`, handleError)
+        });
 
     }
 
     private static addTask(task: ModemTask) {
         Modem.taskStack = [...Modem.taskStack, task];
+        if (Modem.taskStack.length > 1) {
+            return;
+        }
+        Modem.port.write(`at\r`, handleError);
+    }
+
+    private static handleTasksAndNotifications = (receivedData) => {
+        if(Modem.taskStack.length && Modem.taskStack[0].trigger === receivedData) {
+            // process task
+        }
+
+        console.log(`Modem says: ${receivedData}`);
     }
 
     sendTextMessage(recipientNumberNumber: number, text: string) {
-        Modem.port.write(`at+cmgs="${recipientNumberNumber}"\r`, (err) => {
-            if (err) {
-                console.log(err);
-            }
+        Modem.addTask({
+            id: Modem.tasksTotal + 1,
+            trigger: 'OK',
+            fn: () => Modem.port.write(`at+cmgs="${recipientNumberNumber}"\r`, handleError)
         });
-        Modem.port.write(`${text}\x1A`, (err) => {
-            if (err) {
-                console.log(err);
-            }
+        Modem.addTask({
+            id: Modem.tasksTotal + 1,
+            trigger: '> ',
+            fn: () => Modem.port.write(`${text}\x1A`, handleError)
         });
     }
 
     forceWrite(input: string) {
-        Modem.port.write(input, function (err) {
-            if (err) {
-                console.log('Error on write: ', err.message);
-                return;
-            }
+        Modem.addTask({
+            id: Modem.tasksTotal + 1,
+            trigger: 'OK',
+            fn: () => Modem.port.write(input, handleError)
         });
     }
 
