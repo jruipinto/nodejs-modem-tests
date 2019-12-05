@@ -2,6 +2,7 @@
 import { ModemConfig } from './models/modem-config.model';
 import SerialPort from 'serialport';
 import { ModemTask } from './models/modem-task.model';
+import { clone } from 'ramda';
 const Readline = require('@serialport/parser-readline')
 
 const handleError = (err) => {
@@ -12,7 +13,7 @@ const handleError = (err) => {
 
 export class Modem {
 
-    private static taskStack: ModemTask[];
+    private static taskStack: ModemTask[] = [];
     private static tasksTotal = 0;
 
     private static port: SerialPort;
@@ -55,18 +56,29 @@ export class Modem {
 
     private static addTask(task: ModemTask) {
         Modem.taskStack = [...Modem.taskStack, task];
-        if (Modem.taskStack.length > 1) {
+        if (Modem.taskStack && Modem.taskStack.length > 1) {
             return;
         }
         Modem.port.write(`at\r`, handleError);
     }
 
     private static handleTasksAndNotifications = (receivedData) => {
-        if(Modem.taskStack.length && Modem.taskStack[0].trigger === receivedData) {
-            // process task
+        console.log(`Modem says: ${receivedData}`);
+        console.log(`Modem says: ${Modem.taskStack}`);
+        if (Modem.taskStack[0].trigger == receivedData) {
+            console.log('meet task');
+            const taskFunction = clone(Modem.taskStack[0].fn);
+            Modem.taskStack = clone(Modem.taskStack.slice(1));
+            taskFunction();
+            return;
         }
 
-        console.log(`Modem says: ${receivedData}`);
+        // Remaining conditions here
+
+        // if (Modem.taskStack && Modem.taskStack.length > 1) {
+        //     return;
+        // }
+        // Modem.port.write(`at\r`, handleError);
     }
 
     sendTextMessage(recipientNumberNumber: number, text: string) {

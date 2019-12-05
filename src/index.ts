@@ -23,7 +23,7 @@ rl.on('line', (line: any) => {
 })
 
 
-// mdm.sendTextMessage(910138725, 'teste de modem novo').subscribe();
+mdm.sendTextMessage(910138725, 'teste de modem novo');
 
 
 // modem.init(modemConfig)
