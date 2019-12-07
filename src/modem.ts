@@ -37,18 +37,18 @@ export class Modem {
         Modem.parser.on('data', Modem.handleTasksAndNotifications);
 
         Modem.addTask({
-            id: Modem.tasksTotal + 1,
-            trigger: 'OK',
+            id: Modem.generateID(),
+            trigger: 'OK%0D',
             fn: () => Modem.port.write(`at+cmgf=1\r`, handleError)
         });
         Modem.addTask({
-            id: Modem.tasksTotal + 1,
-            trigger: 'OK',
+            id: Modem.generateID(),
+            trigger: 'OK%0D',
             fn: () => Modem.port.write(`at+cnmi=1,1,0,1,0\r`, handleError)
         });
         Modem.addTask({
-            id: Modem.tasksTotal + 1,
-            trigger: 'OK',
+            id: Modem.generateID(),
+            trigger: 'OK%0D',
             fn: () => Modem.port.write(`at+csmp=49,167,0,0\r`, handleError)
         });
 
@@ -59,14 +59,15 @@ export class Modem {
         if (Modem.taskStack && Modem.taskStack.length > 1) {
             return;
         }
-        Modem.port.write(`at\r`, handleError);
+        Modem.port.write(`\x1bat\r`, handleError);
     }
 
-    private static handleTasksAndNotifications = (receivedData) => {
-        console.log(`Modem says: ${receivedData}`);
-        console.log(`Modem says: ${Modem.taskStack}`);
-        if (Modem.taskStack[0].trigger == receivedData) {
-            console.log('meet task');
+    private static handleTasksAndNotifications = (receivedData: string) => {
+        console.log('-----------------------------------------------------');
+        console.log('<', encodeURI(receivedData), '>');
+        console.log(Modem.taskStack);
+        if (Modem.taskStack && Modem.taskStack[0] && (Modem.taskStack[0].trigger === encodeURI(receivedData))) {
+            console.log('meet task', Modem.taskStack[0].id);
             const taskFunction = clone(Modem.taskStack[0].fn);
             Modem.taskStack = clone(Modem.taskStack.slice(1));
             taskFunction();
@@ -81,23 +82,29 @@ export class Modem {
         // Modem.port.write(`at\r`, handleError);
     }
 
+    private static generateID() {
+        Modem.tasksTotal = Modem.tasksTotal + 1;
+        return Modem.tasksTotal;
+
+    }
+
     sendTextMessage(recipientNumberNumber: number, text: string) {
         Modem.addTask({
-            id: Modem.tasksTotal + 1,
-            trigger: 'OK',
+            id: Modem.generateID(),
+            trigger: 'OK%0D',
             fn: () => Modem.port.write(`at+cmgs="${recipientNumberNumber}"\r`, handleError)
         });
         Modem.addTask({
-            id: Modem.tasksTotal + 1,
-            trigger: '> ',
+            id: Modem.generateID(),
+            trigger: '%0D',
             fn: () => Modem.port.write(`${text}\x1A`, handleError)
         });
     }
 
     forceWrite(input: string) {
         Modem.addTask({
-            id: Modem.tasksTotal + 1,
-            trigger: 'OK',
+            id: Modem.generateID(),
+            trigger: 'OK%0D',
             fn: () => Modem.port.write(input, handleError)
         });
     }
