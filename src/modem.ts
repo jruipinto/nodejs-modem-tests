@@ -1,4 +1,5 @@
 import { Subject } from 'rxjs';
+import { tap, filter } from 'rxjs/operators';
 import { ModemConfig } from './models/modem-config.model';
 import SerialPort from 'serialport';
 import { ModemTask } from './models/modem-task.model';
@@ -24,6 +25,7 @@ export class Modem {
     }
 
     private static notifications = new Subject();
+    private static events = new Subject();
 
     constructor(private modemCfg: ModemConfig) {
         Modem.port = new SerialPort(modemCfg.port, { baudRate: modemCfg.baudRate }, handleError);
@@ -36,7 +38,10 @@ export class Modem {
         });
 
         Modem.parser = Modem.port.pipe(new Readline());
-        Modem.parser.on('data', Modem.handleTasksAndNotifications);
+        Modem.parser.on('data', Modem.events.next);
+        Modem.events.pipe(
+            tap(Modem.handleTasksAndNotifications)
+        ).subscribe();
 
         Modem.addTask({
             id: Modem.generateID(),
@@ -64,7 +69,7 @@ export class Modem {
         Modem.port.write(`\x1bat\r`, handleError);
     }
 
-    private static handleTasksAndNotifications = (receivedData: string) => {
+    private static handleTasksAndNotifications = (receivedData) => {
         console.log('-------------------------------------------------------------------------------');
         console.log(receivedData);
         console.log('Tasks left: ', Modem.taskStack);
@@ -78,13 +83,9 @@ export class Modem {
 
         // Remaining conditions here
 
-        // if (Modem.taskStack && Modem.taskStack.length > 1) {
-        //     return;
+        // if (receivedData !== '\r' && receivedData !== 'OK\r') {
+        //     Modem.notifications.next(receivedData);
         // }
-        // Modem.port.write(`at\r`, handleError);
-        if (receivedData !== '\r' && receivedData !== 'OK\r') {
-            Modem.notifications.next(receivedData);
-        }
     }
 
     private static generateID() {
@@ -104,6 +105,9 @@ export class Modem {
             trigger: '\r',
             fn: () => Modem.port.write(`${text}\x1A`, handleError)
         });
+        return Modem.events.pipe(
+            filter( e => e)
+        )
     }
 
     forceWrite(input: string) {
