@@ -38,17 +38,17 @@ export class Modem {
 
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK%0D',
+            trigger: 'OK\r',
             fn: () => Modem.port.write(`at+cmgf=1\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK%0D',
+            trigger: 'OK\r',
             fn: () => Modem.port.write(`at+cnmi=1,1,0,1,0\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK%0D',
+            trigger: 'OK\r',
             fn: () => Modem.port.write(`at+csmp=49,167,0,0\r`, handleError)
         });
 
@@ -63,11 +63,11 @@ export class Modem {
     }
 
     private static handleTasksAndNotifications = (receivedData: string) => {
-        console.log('-----------------------------------------------------');
-        console.log('<', encodeURI(receivedData), '>');
-        console.log(Modem.taskStack);
-        if (Modem.taskStack && Modem.taskStack[0] && (Modem.taskStack[0].trigger === encodeURI(receivedData))) {
-            console.log('meet task', Modem.taskStack[0].id);
+        console.log('-------------------------------------------------------------------------------');
+        console.log(receivedData);
+        console.log('Tasks left: ', Modem.taskStack);
+        if (Modem.taskStack && Modem.taskStack[0] && (encodeURI(Modem.taskStack[0].trigger) === encodeURI(receivedData))) {
+            console.log('Meet task: ', Modem.taskStack[0].id);
             const taskFunction = clone(Modem.taskStack[0].fn);
             Modem.taskStack = clone(Modem.taskStack.slice(1));
             taskFunction();
@@ -91,12 +91,12 @@ export class Modem {
     sendTextMessage(recipientNumberNumber: number, text: string) {
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK%0D',
+            trigger: 'OK\r',
             fn: () => Modem.port.write(`at+cmgs="${recipientNumberNumber}"\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: '%0D',
+            trigger: '\r',
             fn: () => Modem.port.write(`${text}\x1A`, handleError)
         });
     }
@@ -104,7 +104,7 @@ export class Modem {
     forceWrite(input: string) {
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK%0D',
+            trigger: 'OK\r',
             fn: () => Modem.port.write(input, handleError)
         });
     }
