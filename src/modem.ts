@@ -1,9 +1,9 @@
-//import { modemConfig } from '../config/default.json';
+import { Subject } from 'rxjs';
 import { ModemConfig } from './models/modem-config.model';
 import SerialPort from 'serialport';
 import { ModemTask } from './models/modem-task.model';
 import { clone } from 'ramda';
-const Readline = require('@serialport/parser-readline')
+const Readline = require('@serialport/parser-readline');
 
 const handleError = (err) => {
     if (err) {
@@ -22,6 +22,8 @@ export class Modem {
         atOK: true,
         error: false
     }
+
+    private static notifications = new Subject();
 
     constructor(private modemCfg: ModemConfig) {
         Modem.port = new SerialPort(modemCfg.port, { baudRate: modemCfg.baudRate }, handleError);
@@ -80,6 +82,9 @@ export class Modem {
         //     return;
         // }
         // Modem.port.write(`at\r`, handleError);
+        if (receivedData !== '\r' && receivedData !== 'OK\r') {
+            Modem.notifications.next(receivedData);
+        }
     }
 
     private static generateID() {
