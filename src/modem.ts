@@ -1,4 +1,4 @@
-import { Subject } from 'rxjs';
+import { Subject, Observable, BehaviorSubject } from 'rxjs';
 import { tap, filter } from 'rxjs/operators';
 import { ModemConfig } from './models/modem-config.model';
 import SerialPort from 'serialport';
@@ -24,25 +24,41 @@ export class Modem {
         error: false
     }
 
-    private static notifications = new Subject();
-    private static events = new Subject();
+    private static data$: Subject<string> = new Subject();
+    private static error$: Subject<string> = new Subject();
 
     constructor(private modemCfg: ModemConfig) {
         Modem.port = new SerialPort(modemCfg.port, { baudRate: modemCfg.baudRate }, handleError);
 
-        Modem.port.on('error', (err) => {
-            if (err) {
-                Modem.status.error = true;
-                console.log(err);
-            }
-        });
-
-        Modem.parser = Modem.port.pipe(new Readline());
-        Modem.parser.on('data', Modem.events.next);
-        Modem.events.pipe(
-            tap(Modem.handleTasksAndNotifications)
+        Modem.port.on('error', Modem.error$.next);
+        Modem.error$.pipe(
+            tap(err => {
+                if (err) {
+                    Modem.status.error = true;
+                    console.log(err);
+                }
+            })
         ).subscribe();
 
+        Modem.parser = Modem.port.pipe(new Readline());
+        Modem.parser.on('data', Modem.data$.next);
+        Modem.data$.pipe(
+            tap(receivedData => {
+                console.log('-------------------------------------------------------------------------------');
+                console.log(receivedData);
+                console.log('Tasks left: ', Modem.taskStack);
+            }),
+            tap(receivedData => {
+                if (Modem.taskStack && Modem.taskStack[0] && (encodeURI(Modem.taskStack[0].trigger) === encodeURI(receivedData.split(':')[0]))) {
+                    console.log('Meet task: ', Modem.taskStack[0].id);
+                    const taskFunction = clone(Modem.taskStack[0].fn);
+                    Modem.taskStack = clone(Modem.taskStack.slice(1));
+                    taskFunction(receivedData);
+                }
+            })
+        ).subscribe();
+
+        // init modem
         Modem.addTask({
             id: Modem.generateID(),
             trigger: 'OK\r',
@@ -69,25 +85,6 @@ export class Modem {
         Modem.port.write(`\x1bat\r`, handleError);
     }
 
-    private static handleTasksAndNotifications = (receivedData) => {
-        console.log('-------------------------------------------------------------------------------');
-        console.log(receivedData);
-        console.log('Tasks left: ', Modem.taskStack);
-        if (Modem.taskStack && Modem.taskStack[0] && (encodeURI(Modem.taskStack[0].trigger) === encodeURI(receivedData))) {
-            console.log('Meet task: ', Modem.taskStack[0].id);
-            const taskFunction = clone(Modem.taskStack[0].fn);
-            Modem.taskStack = clone(Modem.taskStack.slice(1));
-            taskFunction();
-            return;
-        }
-
-        // Remaining conditions here
-
-        // if (receivedData !== '\r' && receivedData !== 'OK\r') {
-        //     Modem.notifications.next(receivedData);
-        // }
-    }
-
     private static generateID() {
         Modem.tasksTotal = Modem.tasksTotal + 1;
         return Modem.tasksTotal;
@@ -95,6 +92,7 @@ export class Modem {
     }
 
     sendTextMessage(recipientNumberNumber: number, text: string) {
+        const smsInfo: BehaviorSubject<any> = new BehaviorSubject(null);
         Modem.addTask({
             id: Modem.generateID(),
             trigger: 'OK\r',
@@ -105,9 +103,17 @@ export class Modem {
             trigger: '\r',
             fn: () => Modem.port.write(`${text}\x1A`, handleError)
         });
-        return Modem.events.pipe(
-            filter( e => e)
-        )
+        Modem.addTask({
+            id: Modem.generateID(),
+            trigger: '+CDS',
+            fn: smsInfo.next
+        });
+        // return Modem.data$.pipe(
+        //     filter(receivedData => (
+        //         (receivedData.search('+CMGS') > -1)
+        //         || (receivedData.search('+CDS') > -1)
+        //     ))
+        // )
     }
 
     forceWrite(input: string) {
