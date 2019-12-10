@@ -1,5 +1,5 @@
 import { Subject, Observable, BehaviorSubject } from 'rxjs';
-import { tap, filter } from 'rxjs/operators';
+import { tap, filter, concatMap, take } from 'rxjs/operators';
 import { ModemConfig } from './models/modem-config.model';
 import SerialPort from 'serialport';
 import { ModemTask } from './models/modem-task.model';
@@ -79,7 +79,7 @@ export class Modem {
 
     private static addTask(task: ModemTask) {
         Modem.taskStack = [...Modem.taskStack, task];
-        if (Modem.taskStack && Modem.taskStack.length > 1) {
+        if (Modem.taskStack && Modem.taskStack.length && Modem.taskStack.length > 1) {
             return;
         }
         Modem.port.write(`\x1bat\r`, handleError);
@@ -92,7 +92,8 @@ export class Modem {
     }
 
     sendTextMessage(recipientNumberNumber: number, text: string) {
-        const smsInfo: BehaviorSubject<any> = new BehaviorSubject(null);
+        const smsInfo$: BehaviorSubject<any> = new BehaviorSubject(null);
+        let cmgsNumber: number;
         Modem.addTask({
             id: Modem.generateID(),
             trigger: 'OK\r',
@@ -105,15 +106,21 @@ export class Modem {
         });
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: '+CDS',
-            fn: smsInfo.next
+            trigger: '+CMGS',
+            fn: smsInfo$.next
         });
-        // return Modem.data$.pipe(
-        //     filter(receivedData => (
-        //         (receivedData.search('+CMGS') > -1)
-        //         || (receivedData.search('+CDS') > -1)
-        //     ))
-        // )
+        return smsInfo$.pipe(
+            filter(data => data !== null),
+            tap(console.log),
+            filter(data => data.split(':')[0] === '+CMGS'),
+            tap(data => {
+                cmgsNumber = parseInt(data.split(':')[1], 10)
+            }),
+            concatMap(() => Modem.data$),
+            filter(data => data.split(':')[0] === '+CDS'),
+            filter(data => parseInt(data.split(',')[1]) === cmgsNumber),
+            take(1)
+        );
     }
 
     forceWrite(input: string) {
