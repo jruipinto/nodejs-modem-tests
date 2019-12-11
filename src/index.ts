@@ -1,4 +1,3 @@
-//import { modem } from './modem'
 import { Modem } from './modem';
 import { modemConfig } from '../config/default.json';
 
@@ -9,35 +8,22 @@ const rl = readline.createInterface({
     output: process.stdout
 })
 
-const mdm = new Modem(modemConfig);
+const modem = new Modem(modemConfig);
 
 rl.on('line', (line: any) => {
 
     const arg = line.split(', ');
     if (arg[0] === 'send') {
-        mdm.sendTextMessage(arg[1], arg[2]);
+        modem.sendSMS(arg[1], arg[2]);
         return
     }
 
-    mdm.forceWrite(`${line}\r\x1A`);
+    modem.forceWrite(`${line}\r\x1A`);
 })
 
+modem.onReceivedSMS().subscribe(console.log);
 
-mdm.sendTextMessage(910138725, 'teste de modem novo')
+modem.sendSMS(910138725, 'teste de modem novo')
     .subscribe(data => {
         console.log('success', data);
     });
-
-
-// modem.init(modemConfig)
-// // modem.sendTextMessage(910138725, 'teste de modem novo')
-
-// const readline = require('readline');
-// const rl = readline.createInterface({
-//     input: process.stdin,
-//     output: process.stdout
-// })
-
-// rl.on('line', (line) => {
-//     modem.forceWrite(`${line}\r\x1A`)
-// })

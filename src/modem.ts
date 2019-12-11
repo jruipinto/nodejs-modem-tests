@@ -1,9 +1,9 @@
-import { Subject, Observable, BehaviorSubject } from 'rxjs';
+import { Subject, BehaviorSubject } from 'rxjs';
 import { tap, filter, concatMap, take } from 'rxjs/operators';
-import { ModemConfig } from './models/modem-config.model';
-import SerialPort from 'serialport';
-import { ModemTask } from './models/modem-task.model';
 import { clone } from 'ramda';
+import { ModemConfig } from './models/modem-config.model';
+import { ModemTask } from './models/modem-task.model';
+import SerialPort from 'serialport';
 const Readline = require('@serialport/parser-readline');
 
 const handleError = (err) => {
@@ -11,6 +11,7 @@ const handleError = (err) => {
         console.log(err.message);
     }
 };
+const notNull = <T>(value: T | null): value is T => value !== null;
 
 export class Modem {
 
@@ -20,7 +21,6 @@ export class Modem {
     private static port: SerialPort;
     private static parser: any;
     private static status = {
-        atOK: true,
         error: false,
         debugMode: false
     }
@@ -53,7 +53,7 @@ export class Modem {
         Modem.data$.pipe(
             tap(receivedData => {
                 if (Modem.status.debugMode) {
-                    console.log('-------------------------------------------------------------------------------');
+                    console.log('\r\n\r\n------');
                     console.log(receivedData);
                     console.log('Tasks left: ', Modem.taskStack);
                 }
@@ -103,10 +103,10 @@ export class Modem {
 
     }
 
-    sendTextMessage(recipientNumberNumber: number, text: string) {
+    sendSMS(recipientNumberNumber: number, text: string) {
         const smsInfo$: BehaviorSubject<any> = new BehaviorSubject(null);
-        const notNull = <T>(value: T | null): value is T => value !== null;
         let cmgsNumber: number;
+
         Modem.addTask({
             id: Modem.generateID(),
             trigger: 'OK\r',
@@ -122,6 +122,7 @@ export class Modem {
             trigger: '+CMGS',
             fn: receivedData => smsInfo$.next(receivedData)
         });
+
         return smsInfo$.pipe(
             filter(notNull),
             filter(data => data.split(':')[0] === '+CMGS'),
@@ -133,6 +134,13 @@ export class Modem {
         );
     }
 
+    onReceivedSMS() {
+        return Modem.data$.pipe(
+            filter(notNull),
+            filter(data => data.split(':')[0] === '+CMTI')
+        )
+    }
+
     forceWrite(input: string) {
         Modem.addTask({
             id: Modem.generateID(),
@@ -142,118 +150,3 @@ export class Modem {
     }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// //const modemCfg: ModemConfig = modemConfig;
-
-// // const port = new SerialPort(modemCfg.port, { baudRate: modemCfg.baudRate }, function (err: Error) {
-// //     if (err) {
-// //         return console.log(`Error on opening ${modemCfg.port}:`, err.message)
-// //     }
-// // })
-// const parser = new Readline();
-// const portWrite = bindCallback(port.write);
-// const parserOn = port.pipe(parser);
-
-// export const modem = {
-
-//     status: {
-//         atOK: false,
-//         error: false
-//     },
-
-//     sendTextMessage: (recipientNumberNumber: number, text: string) => {
-//         if (!modem.status.atOK || modem.status.error) {
-//             setTimeout(() => {
-//                 if (!modem.status.atOK || modem.status.error) {
-//                     console.log('modemStatus:' + modem.status)
-//                     return false
-//                 }
-//                 port.write(`at+cmgs="${recipientNumberNumber}"\r`, function (err) {
-//                     if (err) {
-//                         return console.log('Error on sms header: ', err.message)
-//                     }
-
-//                     port.write(`${text}\x1A`, function (err) {
-//                         if (err) {
-//                             return console.log('Error on sms text: ', err.message)
-//                         }
-//                         console.log('SMS generated sucessfully')
-//                     })
-//                 })
-//             }, 5000);
-//         }
-//     },
-
-//     init: (modemCfg: ModemConfig) => {
-
-//         const port = new SerialPort(modemCfg.port, { baudRate: modemCfg.baudRate }, function (err: Error) {
-//             if (err) {
-//                 return console.log(`Error on opening ${modemCfg.port}:`, err.message)
-//             }
-//         })
-
-//         const parser = new Readline()
-//         port.pipe(parser)
-
-//         parser.on('data', (line: string) => {
-//             if (line === 'OK') {
-//                 modem.status.atOK = true
-//                 console.log('modemStatus.atOK = true')
-//             }
-//             console.log(`Modem says: ${line}`)
-//         })
-//         port.on('error', function (err) {
-//             modem.status.error = true
-//             console.log('Error: ', err.message)
-//         })
-//         // port.write(`at+cmgf=1\r`, function (err) {// configuring to text mode (at+cmgf=1 is text)
-//         //     setTimeout(() => {
-//         //         setTimeout(() => {
-//         //             port.write('at+cnmi=1,1,0,1,0\r', function (err) { }) // configuring notifications
-//         //         }, 2000)
-//         //     }, 2000)
-//         // })
-//         // port.write(`at\r`, function (err) {
-//         //     if (err) {
-//         //         modem.status.atOK = false;
-//         //         console.log('Error on write: ', err.message)
-//         //         return
-//         //     }
-//         // })
-//     },
-
-//     forceWrite: (input: string) => {
-//         // port.write(input, function (err) {
-//         //     if (err) {
-//         //         modem.status.atOK = false;
-//         //         console.log('Error on write: ', err.message)
-//         //         return
-//         //     }
-//         // })
-//         portWrite(input).subscribe(
-//             next => null,
-//             err => {
-//                 modem.status.atOK = false;
-//                 console.log('Error on write: ', err.message)
-//             },
-//             complete => console.log('forceWrite complete')
-//         )
-//     }
-
-// }
-
