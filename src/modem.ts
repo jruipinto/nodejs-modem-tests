@@ -21,7 +21,8 @@ export class Modem {
     private static parser: any;
     private static status = {
         atOK: true,
-        error: false
+        error: false,
+        debugMode: false
     }
 
     private static data$: Subject<string> = new Subject();
@@ -29,28 +30,39 @@ export class Modem {
 
     constructor(private modemCfg: ModemConfig) {
         Modem.port = new SerialPort(modemCfg.port, { baudRate: modemCfg.baudRate }, handleError);
+        Modem.status.debugMode = modemCfg.debugMode ? true : false;
 
-        Modem.port.on('error', Modem.error$.next);
+        Modem.port.on('error', err => {
+            if (err) {
+                Modem.error$.next(err);
+            }
+        });
         Modem.error$.pipe(
             tap(err => {
-                if (err) {
-                    Modem.status.error = true;
-                    console.log(err);
-                }
+                Modem.status.error = true;
+                console.log('Modem error:', err);
             })
         ).subscribe();
 
         Modem.parser = Modem.port.pipe(new Readline());
-        Modem.parser.on('data', Modem.data$.next);
+        Modem.parser.on('data', receivedData => {
+            if (receivedData) {
+                Modem.data$.next(receivedData);
+            }
+        });
         Modem.data$.pipe(
             tap(receivedData => {
-                console.log('-------------------------------------------------------------------------------');
-                console.log(receivedData);
-                console.log('Tasks left: ', Modem.taskStack);
+                if (Modem.status.debugMode) {
+                    console.log('-------------------------------------------------------------------------------');
+                    console.log(receivedData);
+                    console.log('Tasks left: ', Modem.taskStack);
+                }
             }),
             tap(receivedData => {
                 if (Modem.taskStack && Modem.taskStack[0] && (encodeURI(Modem.taskStack[0].trigger) === encodeURI(receivedData.split(':')[0]))) {
-                    console.log('Meet task: ', Modem.taskStack[0].id);
+                    if (Modem.status.debugMode) {
+                        console.log('Meet task: ', Modem.taskStack[0].id);
+                    }
                     const taskFunction = clone(Modem.taskStack[0].fn);
                     Modem.taskStack = clone(Modem.taskStack.slice(1));
                     taskFunction(receivedData);
@@ -93,6 +105,7 @@ export class Modem {
 
     sendTextMessage(recipientNumberNumber: number, text: string) {
         const smsInfo$: BehaviorSubject<any> = new BehaviorSubject(null);
+        const notNull = <T>(value: T | null): value is T => value !== null;
         let cmgsNumber: number;
         Modem.addTask({
             id: Modem.generateID(),
@@ -107,15 +120,12 @@ export class Modem {
         Modem.addTask({
             id: Modem.generateID(),
             trigger: '+CMGS',
-            fn: smsInfo$.next
+            fn: receivedData => smsInfo$.next(receivedData)
         });
         return smsInfo$.pipe(
-            filter(data => data !== null),
-            tap(console.log),
+            filter(notNull),
             filter(data => data.split(':')[0] === '+CMGS'),
-            tap(data => {
-                cmgsNumber = parseInt(data.split(':')[1], 10)
-            }),
+            tap(data => { cmgsNumber = parseInt(data.split(':')[1], 10); }),
             concatMap(() => Modem.data$),
             filter(data => data.split(':')[0] === '+CDS'),
             filter(data => parseInt(data.split(',')[1]) === cmgsNumber),

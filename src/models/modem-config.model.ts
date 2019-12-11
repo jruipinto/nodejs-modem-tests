@@ -4,4 +4,5 @@ export interface ModemConfig {
     pin: null | number;
     smsMode: boolean; /* true = text; false = pdu */
     extendedErrorReports: boolean;
+    debugMode: boolean;
 }
