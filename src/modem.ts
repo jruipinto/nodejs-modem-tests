@@ -1,9 +1,10 @@
-import { Subject, BehaviorSubject } from 'rxjs';
-import { tap, filter, concatMap, take } from 'rxjs/operators';
+import { Subject, BehaviorSubject, Observable } from 'rxjs';
+import { tap, filter, concatMap, take, map } from 'rxjs/operators';
 import { clone } from 'ramda';
 import { ModemConfig } from './models/modem-config.model';
 import { ModemTask } from './models/modem-task.model';
 import SerialPort from 'serialport';
+import { SMSDeliveryReport } from './models/sms-delivery-report.model';
 const Readline = require('@serialport/parser-readline');
 
 const handleError = (err) => {
@@ -109,7 +110,7 @@ export class Modem {
 
     }
 
-    sendSMS(recipientNumberNumber: number, text: string) {
+    sendSMS(recipientNumberNumber: number, text: string): Observable<SMSDeliveryReport> {
         const smsInfo$: BehaviorSubject<any> = new BehaviorSubject(null);
         let cmgsNumber: number;
 
@@ -136,6 +137,18 @@ export class Modem {
             concatMap(() => Modem.data$),
             filter(data => data.split(':')[0] === '+CDS'),
             filter(data => parseInt(data.split(',')[1]) === cmgsNumber),
+            map(data => {
+                const cds = data.split(': ')[0];
+                const report: SMSDeliveryReport = {
+                    firstOctet: ~~cds[1],
+                    id: ~~cds[2],
+                    recipient: ~~cds[3],
+                    submitTime: new Date(cds[5]),
+                    deliveryTime: new Date(cds[6]),
+                    st: ~~cds[7]
+                }
+                return report
+            }),
             take(1)
         );
     }
@@ -154,8 +167,7 @@ export class Modem {
                 });
                 return Modem.data$;
             }),
-            // filter(data => data.split(':')[0] === '+CMGR'),
-            // filter(data => parseInt(data.split(',')[1]) === cmgrNumber)
+            filter(data => data.split(':')[0] === '+CMGR')
         );
     }
 
