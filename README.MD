@@ -19,8 +19,10 @@ example:
 
 AT WRITING COMMANDS
 
-configure status reports to be received on computer
+configure status reports to be received on computer:
 AT+CSMP=49,167,0,0      // further investigation needed but works (modem answer: 'OK')
+                        // https://www.smssolutions.net/tutorials/gsm/sendsmsat/
+                        // http://www.testech-elect.com/enfora/tutorial_send_receive_sms_using_gsm_modem.htm
 
 Configure notifications command:
 at+cnmi
@@ -35,6 +37,15 @@ at+cmgf
 
 example:
 at+cmgf=1               // configure to text mode (modem answer: 'OK')
+
+
+
+Configure memory for SMS comand:
+at+cpms
+
+example:
+at+cpms="sm","sm","sm"               // configure memory for SMS as "SM" wich is SIM card
+                                    // (modem answer: 'OK')
 
 
 
