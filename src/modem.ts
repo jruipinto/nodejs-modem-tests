@@ -74,18 +74,24 @@ export class Modem {
         Modem.addTask({
             id: Modem.generateID(),
             trigger: 'OK\r',
-            fn: () => Modem.port.write(`at+cmgf=1\r`, handleError)
+            fn: () => Modem.port.write(`AT+CMGF=1\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
             trigger: 'OK\r',
-            fn: () => Modem.port.write(`at+cnmi=1,1,0,1,0\r`, handleError)
+            fn: () => Modem.port.write(`AT+CNMI=1,1,0,1,0\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
             trigger: 'OK\r',
-            fn: () => Modem.port.write(`at+csmp=49,167,0,0\r`, handleError)
+            fn: () => Modem.port.write(`AT+CSMP=49,167,0,0\r`, handleError)
         });
+        Modem.addTask({
+            id: Modem.generateID(),
+            trigger: 'OK\r',
+            fn: () => Modem.port.write(`AT+CPMS="SM","SM","SM"\r`, handleError)
+        });
+
 
     }
 
@@ -94,7 +100,7 @@ export class Modem {
         if (Modem.taskStack && Modem.taskStack.length && Modem.taskStack.length > 1) {
             return;
         }
-        Modem.port.write(`\x1bat\r`, handleError);
+        Modem.port.write(`\x1bAT\r`, handleError);
     }
 
     private static generateID() {
@@ -110,7 +116,7 @@ export class Modem {
         Modem.addTask({
             id: Modem.generateID(),
             trigger: 'OK\r',
-            fn: () => Modem.port.write(`at+cmgs="${recipientNumberNumber}"\r`, handleError)
+            fn: () => Modem.port.write(`AT+CMGS="${recipientNumberNumber}"\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
@@ -135,10 +141,22 @@ export class Modem {
     }
 
     onReceivedSMS() {
+        let cmgrNumber: number;
         return Modem.data$.pipe(
             filter(notNull),
-            filter(data => data.split(':')[0] === '+CMTI')
-        )
+            filter(data => data.split(':')[0] === '+CMTI'),
+            tap(data => { cmgrNumber = parseInt(data.split(',')[1]); }),
+            concatMap(() => {
+                Modem.addTask({
+                    id: Modem.generateID(),
+                    trigger: 'OK\r',
+                    fn: () => Modem.port.write(`AT+CMGR=${cmgrNumber}\r`, handleError)
+                });
+                return Modem.data$;
+            }),
+            // filter(data => data.split(':')[0] === '+CMGR'),
+            // filter(data => parseInt(data.split(',')[1]) === cmgrNumber)
+        );
     }
 
     forceWrite(input: string) {
