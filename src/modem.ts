@@ -1,10 +1,8 @@
 import { Subject, BehaviorSubject, Observable } from 'rxjs';
 import { tap, filter, concatMap, take, map } from 'rxjs/operators';
 import { clone } from 'ramda';
-import { ModemConfig } from './models/modem-config.model';
-import { ModemTask } from './models/modem-task.model';
 import SerialPort from 'serialport';
-import { SMSDeliveryReport } from './models/sms-delivery-report.model';
+import { ModemTask, ModemConfig, SMS, DeliveredSMSReport, ReceivedSMS } from './models';
 const Readline = require('@serialport/parser-readline');
 
 const handleError = (err) => {
@@ -55,18 +53,20 @@ export class Modem {
             tap(receivedData => {
                 if (Modem.status.debugMode) {
                     console.log('\r\n\r\n------');
-                    console.log(receivedData);
-                    console.log('Tasks left: ', Modem.taskStack);
+                    console.log(receivedData.replace('\r', '<CR>'));
                 }
             }),
             tap(receivedData => {
-                if (Modem.taskStack && Modem.taskStack[0] && (encodeURI(Modem.taskStack[0].trigger) === encodeURI(receivedData.split(':')[0]))) {
+                if (Modem.taskStack && Modem.taskStack[0] && receivedData.includes(Modem.taskStack[0].trigger)) {
                     if (Modem.status.debugMode) {
                         console.log('Meet task: ', Modem.taskStack[0].id);
                     }
                     const taskFunction = clone(Modem.taskStack[0].fn);
                     Modem.taskStack = clone(Modem.taskStack.slice(1));
                     taskFunction(receivedData);
+                    if (Modem.status.debugMode) {
+                        console.log('Tasks left: ', Modem.taskStack);
+                    }
                 }
             })
         ).subscribe();
@@ -74,22 +74,22 @@ export class Modem {
         // init modem
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK\r',
+            trigger: 'OK',
             fn: () => Modem.port.write(`AT+CMGF=1\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK\r',
+            trigger: 'OK',
             fn: () => Modem.port.write(`AT+CNMI=1,1,0,1,0\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK\r',
+            trigger: 'OK',
             fn: () => Modem.port.write(`AT+CSMP=49,167,0,0\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK\r',
+            trigger: 'OK',
             fn: () => Modem.port.write(`AT+CPMS="SM","SM","SM"\r`, handleError)
         });
 
@@ -110,14 +110,14 @@ export class Modem {
 
     }
 
-    sendSMS(recipientNumberNumber: number, text: string): Observable<SMSDeliveryReport> {
+    sendSMS({ phoneNumber, text }: SMS): Observable<DeliveredSMSReport> {
         const smsInfo$: BehaviorSubject<any> = new BehaviorSubject(null);
         let cmgsNumber: number;
 
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK\r',
-            fn: () => Modem.port.write(`AT+CMGS="${recipientNumberNumber}"\r`, handleError)
+            trigger: 'OK',
+            fn: () => Modem.port.write(`AT+CMGS="${phoneNumber}"\r`, handleError)
         });
         Modem.addTask({
             id: Modem.generateID(),
@@ -126,26 +126,28 @@ export class Modem {
         });
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: '+CMGS',
+            trigger: '+CMGS:',
             fn: receivedData => smsInfo$.next(receivedData)
         });
 
         return smsInfo$.pipe(
             filter(notNull),
-            filter(data => data.split(':')[0] === '+CMGS'),
+            filter(data => data.includes('+CMGS:')),
             tap(data => { cmgsNumber = parseInt(data.split(':')[1], 10); }),
             concatMap(() => Modem.data$),
-            filter(data => data.split(':')[0] === '+CDS'),
+            filter(data => data.includes('+CDS:')),
             filter(data => parseInt(data.split(',')[1]) === cmgsNumber),
             map(data => {
-                const cds = data.split(': ')[0];
-                const report: SMSDeliveryReport = {
-                    firstOctet: ~~cds[1],
-                    id: ~~cds[2],
-                    recipient: ~~cds[3],
-                    submitTime: new Date(cds[5]),
-                    deliveryTime: new Date(cds[6]),
-                    st: ~~cds[7]
+                const cds = data
+                    .split(': ')[1]
+                    .split(',');
+                const report: DeliveredSMSReport = {
+                    firstOctet: ~~cds[0],
+                    id: ~~cds[1],
+                    phoneNumber: ~~cds[2].replace('"', '').replace('"', ''),
+                    submitTime: cds[4].replace('"', '').replace('"', '') + ',' + cds[5].replace('"', '').replace('"', ''),
+                    deliveryTime: cds[6].replace('"', '') + ',' + cds[7].replace('"', ''),
+                    st: ~~cds[8]
                 }
                 return report
             }),
@@ -153,28 +155,61 @@ export class Modem {
         );
     }
 
-    onReceivedSMS() {
-        let cmgrNumber: number;
+    onReceivedSMS(): Observable<ReceivedSMS> {
+        let readingSMS: boolean = false;
+        let newSMS: ReceivedSMS = {
+            phoneNumber: '',
+            submitTime: '',
+            text: ''
+        };
         return Modem.data$.pipe(
-            filter(notNull),
-            filter(data => data.split(':')[0] === '+CMTI'),
-            tap(data => { cmgrNumber = parseInt(data.split(',')[1]); }),
-            concatMap(() => {
-                Modem.addTask({
-                    id: Modem.generateID(),
-                    trigger: 'OK\r',
-                    fn: () => Modem.port.write(`AT+CMGR=${cmgrNumber}\r`, handleError)
-                });
-                return Modem.data$;
+            tap(data => {
+                if (data.includes('+CMTI:')) {
+                    Modem.addTask({
+                        id: Modem.generateID(),
+                        trigger: 'OK',
+                        fn: () => Modem.port.write(`AT+CMGR=${~~data.split(',')[1]}\r`, handleError)
+                    });
+                }
+                if (data.includes('+CMGR:')) {
+                    readingSMS = true;
+                }
             }),
-            filter(data => data.split(':')[0] === '+CMGR')
+            filter(data => readingSMS),
+            tap(data => {
+                if (data.includes('OK\r')) {
+                    readingSMS = false;
+                }
+            }),
+            map(data => {
+                if (data.includes('OK\r')) {
+                    newSMS.text = newSMS.text ? newSMS.text.trim() : '';
+                    return newSMS;
+                }
+                if (data.includes('+CMGR:')) {
+                    const cmgr = data.split(',');
+                    newSMS.phoneNumber = cmgr[1].replace('"', '').replace('+', '00').replace('"', '');
+                    newSMS.submitTime = (cmgr[3].replace('"', '') + ',' + cmgr[4].replace('"', '')).trim();
+                    return null;
+                }
+                newSMS.text = newSMS.text ? newSMS.text + data : data;
+                return null;
+            }),
+            filter(notNull),
+            tap(() => {
+                newSMS = {
+                    phoneNumber: '',
+                    submitTime: '',
+                    text: ''
+                }
+            })
         );
     }
 
     forceWrite(input: string) {
         Modem.addTask({
             id: Modem.generateID(),
-            trigger: 'OK\r',
+            trigger: 'OK',
             fn: () => Modem.port.write(input, handleError)
         });
     }
