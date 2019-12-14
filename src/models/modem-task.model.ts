@@ -1,5 +1,5 @@
 export interface ModemTask {
     id: number;
     fn: (receivedData: string) => void;
-    trigger: string | 'OK\r' | '\r';
+    trigger: string | 'OK' | '\r' | string;
 }
