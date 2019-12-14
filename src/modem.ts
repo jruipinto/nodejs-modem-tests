@@ -158,6 +158,7 @@ export class Modem {
     onReceivedSMS(): Observable<ReceivedSMS> {
         let readingSMS: boolean = false;
         let newSMS: ReceivedSMS = {
+            id: 0,
             phoneNumber: '',
             submitTime: '',
             text: ''
@@ -165,6 +166,7 @@ export class Modem {
         return Modem.data$.pipe(
             tap(data => {
                 if (data.includes('+CMTI:')) {
+                    newSMS.id = ~~data.split(',')[1]
                     Modem.addTask({
                         id: Modem.generateID(),
                         trigger: 'OK',
@@ -198,10 +200,18 @@ export class Modem {
             filter(notNull),
             tap(() => {
                 newSMS = {
+                    id: 0,
                     phoneNumber: '',
                     submitTime: '',
                     text: ''
                 }
+            }),
+            tap(({ id }) => {
+                Modem.addTask({
+                    id: Modem.generateID(),
+                    trigger: 'OK',
+                    fn: () => Modem.port.write(`AT+CMGD=${id}\r`, handleError)
+                });
             })
         );
     }
