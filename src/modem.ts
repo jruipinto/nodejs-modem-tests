@@ -85,6 +85,11 @@ export class Modem {
         Modem.addTask({
             id: Modem.generateID(),
             trigger: 'OK',
+            fn: () => Modem.port.write(`AT+CNMI=2\r`, handleError)
+        });
+        Modem.addTask({
+            id: Modem.generateID(),
+            trigger: 'OK',
             fn: () => Modem.port.write(`AT+CSMP=49,167,0,0\r`, handleError)
         });
         Modem.addTask({
