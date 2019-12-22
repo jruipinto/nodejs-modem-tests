@@ -19,13 +19,22 @@ rl.on('line', (line: any) => {
             });
         return
     }
-    modem.forceWrite(`${line}\r\x1A`);
+    console.log('to send a message over the cmd please write it like the following: send, <phoneNumber>, <message>')
 });
 
-modem.onReceivedSMS().subscribe(sms => console.log('SMS Received:', sms));
+modem.onReceivedSMS().subscribe(sms => console.log('SMS Received:\r\n', sms, '\r\n'));
 
-modem.sendSMS({ phoneNumber: 910138725, text: 'teste de modem' })
-    .subscribe(data => console.log('Delivery Report:', data));
-
-modem.sendSMS({ phoneNumber: 910138725, text: 'teste de modem novo' })
-    .subscribe(data => console.log('Delivery Report:', data));
+let i: number = 0
+let count: number = 0;
+while (i < 3) {
+    console.log(`sending ${i}...`);
+    console.log('\r\n');
+    modem.sendSMS({ phoneNumber: 910138725, text: `teste de modem ${i}` })
+        .subscribe(data => {
+            console.log('Delivery Report:\r\n', data);
+            console.log(count);
+            console.log('\r\n');
+            count = count + 1;
+        });
+    i = i + 1;
+}

@@ -1,9 +1,19 @@
 {
     "modemConfig": {
-        "port": "COM5",
+        "port": "COM10",
         "baudRate": 230400,
         "pin": null,
         "smsMode": true,
-        "extendedErrorReports": true
+        "extendedErrorReports": true,
+        "debugMode": true,
+        "initCommands": [
+            "\u241bAT",
+            "AT+CMGF=1",
+            "AT+CNMI=1,1,0,1,0",
+            "AT+CNMI=2",
+            "AT+CSMP=49,167,0,0",
+            "AT+CPMS=\"SM\",\"SM\",\"SM\""
+        ],
+        "msPause": 10000
     }
 }
