@@ -1,4 +1,4 @@
-import { Modem } from './modem';
+import { Modem } from 'modemjs';
 import { modemConfig } from '../config/default.json';
 
 

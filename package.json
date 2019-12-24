@@ -13,6 +13,7 @@
   "dependencies": {
     "@types/node": "^12.12.7",
     "@types/ramda": "^0.26.36",
+    "modemjs": "^1.0.0",
     "ramda": "^0.26.1",
     "rxjs": "^6.5.3",
     "serialport": "^8.0.5"
